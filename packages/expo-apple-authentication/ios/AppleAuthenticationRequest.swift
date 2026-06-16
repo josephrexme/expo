@@ -11,6 +11,7 @@ final class AppleAuthenticationRequest: NSObject, ASAuthorizationControllerPrese
   let options: AppleAuthenticationRequestOptions
   var callback: AuthenticationRequestCallback?
   var authController: ASAuthorizationController?
+  private var presentationAnchorWindow: UIWindow?
 
   init(options: AppleAuthenticationRequestOptions) {
     self.options = options
@@ -20,6 +21,11 @@ final class AppleAuthenticationRequest: NSObject, ASAuthorizationControllerPrese
     self.callback = callback
 
     do {
+      guard let window = Self.keyWindow() else {
+        throw WindowUnavailableException()
+      }
+      presentationAnchorWindow = window
+
       let appleIdProvider = ASAuthorizationAppleIDProvider()
       let request = appleIdProvider.createRequest()
 
@@ -81,9 +87,13 @@ final class AppleAuthenticationRequest: NSObject, ASAuthorizationControllerPrese
   // MARK: - ASAuthorizationControllerPresentationContextProviding
 
   func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
-    guard let window = UIApplication.shared.keyWindow else {
-      fatalError("Unable to present authentication modal because UIApplication.shared.keyWindow is not available")
-    }
-    return window
+    return presentationAnchorWindow ?? UIWindow()
+  }
+
+  private static func keyWindow() -> UIWindow? {
+    UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+      .flatMap { $0.windows }
+      .first { $0.isKeyWindow }
   }
 }

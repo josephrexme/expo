@@ -55,6 +55,12 @@ final class RequestMatchedExcludedCredentialException: Exception {
   }
 }
 
+final class WindowUnavailableException: Exception {
+  override var reason: String {
+    "Couldn't present the Sign in with Apple sheet because no active window is available"
+  }
+}
+
 func exceptionForAuthorizationError(_ error: ASAuthorizationError) -> Exception {
   switch error.code {
   case .unknown:
