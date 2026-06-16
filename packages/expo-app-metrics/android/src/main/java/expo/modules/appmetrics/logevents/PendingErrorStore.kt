@@ -1,0 +1,112 @@
+package expo.modules.appmetrics.logevents
+
+import android.content.Context
+import android.util.Log
+import expo.modules.appmetrics.utils.JsonAny
+import java.io.File
+import java.util.UUID
+
+/**
+ * Durable store for fatal JavaScript errors.
+ *
+ * A fatal error terminates the process moments after the `global.ErrorUtils` handler returns, so the
+ * normal async (coroutine + Room) log path can race the shutdown and lose the record. Instead, the
+ * fatal path writes the error to a small JSON file **synchronously** on the calling thread (no
+ * coroutine, no database) before React Native tears the app down. On the next launch the pending
+ * files are drained into the regular log pipeline as `exception` events.
+ */
+object PendingErrorStore {
+  private const val TAG = "AppMetrics"
+
+  /** Caps how many pending files are kept/ingested, so a crash-on-launch loop can't pile up files. */
+  private const val MAX_PENDING_ERRORS = 32
+
+  /**
+   * The single error captured at fatal time. Carries the owning session id and timestamp resolved at
+   * write time, since by drain time (next launch) the main session has rotated.
+   */
+  data class PendingError(
+    val source: String,
+    val type: String? = null,
+    val message: String,
+    val stacktrace: String? = null,
+    val sessionId: String,
+    val timestamp: String
+  ) {
+    fun toJsonMap(): Map<String, Any?> =
+      buildMap {
+        put("source", source)
+        type?.let { put("type", it) }
+        put("message", message)
+        stacktrace?.let { put("stacktrace", it) }
+        put("sessionId", sessionId)
+        put("timestamp", timestamp)
+      }
+
+    companion object {
+      fun fromJsonMap(map: Map<String, Any?>): PendingError? {
+        val source = map["source"] as? String ?: return null
+        val message = map["message"] as? String ?: return null
+        val sessionId = map["sessionId"] as? String ?: return null
+        val timestamp = map["timestamp"] as? String ?: return null
+        return PendingError(
+          source = source,
+          type = map["type"] as? String,
+          message = message,
+          stacktrace = map["stacktrace"] as? String,
+          sessionId = sessionId,
+          timestamp = timestamp
+        )
+      }
+    }
+  }
+
+  /**
+   * Writes a fatal error to disk synchronously. Best-effort: any failure is swallowed (we're on the
+   * way to a crash and must not throw out of the error handler).
+   */
+  fun write(context: Context, error: PendingError) {
+    runCatching {
+      val directory = directory(context)
+      val fileName = "${error.timestamp}-${UUID.randomUUID()}.json"
+      val target = File(directory, fileName)
+      // Write to a temp file then rename, so an interrupted process never leaves a half-written file.
+      val temp = File(directory, "$fileName.tmp")
+      temp.writeText(JsonAny.encodeMapToJsonString(error.toJsonMap()))
+      temp.renameTo(target)
+    }
+  }
+
+  /**
+   * Reads all pending errors oldest-first and removes their files. Returns the decoded errors so the
+   * caller can ingest them. Corrupt files are deleted and skipped.
+   */
+  fun drain(context: Context): List<PendingError> {
+    val directory = directory(context)
+    // File names are prefixed with an ISO-8601 timestamp, so lexicographic order is chronological.
+    val files = directory.listFiles { file -> file.extension == "json" }
+      ?.sortedBy { it.name }
+      ?: return emptyList()
+
+    val overflow = (files.size - MAX_PENDING_ERRORS).coerceAtLeast(0)
+    if (overflow > 0) {
+      Log.w(TAG, "Dropping $overflow pending error file(s) past the $MAX_PENDING_ERRORS cap.")
+    }
+
+    val errors = mutableListOf<PendingError>()
+    files.forEachIndexed { index, file ->
+      if (index >= overflow) {
+        runCatching { JsonAny.decodeJsonStringToMap(file.readText()) }
+          .getOrNull()
+          ?.let { PendingError.fromJsonMap(it) }
+          ?.let { errors.add(it) }
+      }
+      // Delete every file we touch (overflow and corrupt included) so the directory can't grow.
+      file.delete()
+    }
+    return errors
+  }
+
+  private fun directory(context: Context): File =
+    File(context.filesDir, "ExpoAppMetrics/pending-errors").apply { mkdirs() }
+}

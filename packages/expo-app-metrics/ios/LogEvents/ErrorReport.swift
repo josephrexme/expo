@@ -17,23 +17,55 @@ struct ErrorReport {
     case global
   }
 
-  /// Builds the `exception` log event. Following OpenTelemetry's exception-in-logs convention, the
-  /// error rides as `exception.*` attributes (the event name is `exception` because this captures
-  /// errors from a handler, not a specific operation). `expo.error.*` carries the bits OTel has no
-  /// field for: the capture source and whether the error was fatal. Fatal errors log at `fatal`
-  /// severity, the rest at `error`.
+  /// Builds the `exception` log event for the live (non-fatal) path.
   func toLogRecord() -> LogRecord {
-    var attributes: [String: Any] = [
-      "expo.error.source": source.rawValue,
-      "expo.error.is_fatal": isFatal,
-    ]
-    attributes["exception.type"] = type
-    attributes["exception.message"] = message
-    attributes["exception.stacktrace"] = stacktrace
-    return LogRecord(
-      name: "exception",
-      attributes: attributes,
-      severity: isFatal ? .fatal : .error
+    return makeErrorLogRecord(
+      source: source.rawValue,
+      type: type,
+      message: message,
+      stacktrace: stacktrace,
+      isFatal: isFatal
     )
   }
+
+  /// Snapshots this report for durable on-disk storage, capturing the session it belongs to and the
+  /// time it happened — both resolved now, since by drain time the main session has rotated.
+  func toPendingError(sessionId: String) -> PendingErrorStore.PendingError {
+    return PendingErrorStore.PendingError(
+      source: source.rawValue,
+      type: type,
+      message: message,
+      stacktrace: stacktrace,
+      sessionId: sessionId,
+      timestamp: Date.now.ISO8601Format()
+    )
+  }
+}
+
+/// Builds the `exception` log event. Following OpenTelemetry's exception-in-logs convention, the error
+/// rides as `exception.*` attributes (the event name is `exception` because this captures errors from
+/// a handler, not a specific operation). `expo.error.*` carries the bits OTel has no field for: the
+/// capture source and whether the error was fatal. Fatal errors log at `fatal` severity, the rest at
+/// `error`. Shared by the live path and the next-launch ingest of pending fatal errors.
+func makeErrorLogRecord(
+  source: String,
+  type: String?,
+  message: String,
+  stacktrace: String?,
+  isFatal: Bool,
+  timestamp: String = Date.now.ISO8601Format()
+) -> LogRecord {
+  var attributes: [String: Any] = [
+    "expo.error.source": source,
+    "expo.error.is_fatal": isFatal,
+  ]
+  attributes["exception.type"] = type
+  attributes["exception.message"] = message
+  attributes["exception.stacktrace"] = stacktrace
+  return LogRecord(
+    name: "exception",
+    attributes: attributes,
+    severity: isFatal ? .fatal : .error,
+    timestamp: timestamp
+  )
 }
