@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import ExpoWidgetsModule from './ExpoWidgets';
 /**
  * Represents a widget instance. Provides methods to manage the widget's timeline.
@@ -19,6 +20,9 @@ export class Widget {
      * @param entries Timeline entries, each specifying a date and the props to display at that time.
      */
     updateTimeline(entries) {
+        if (Platform.OS === 'android') {
+            return;
+        }
         this.nativeWidgetObject.updateTimeline(entries.map((entry) => ({ timestamp: entry.date.getTime(), props: entry.props })));
     }
     /**
@@ -26,7 +30,12 @@ export class Widget {
      * @param props The properties to display in the widget.
      */
     updateSnapshot(props) {
-        this.nativeWidgetObject.updateTimeline([{ timestamp: Date.now(), props }]);
+        if (Platform.OS === 'android') {
+            this.nativeWidgetObject.updateSnapshot(props);
+        }
+        else {
+            this.nativeWidgetObject.updateTimeline([{ timestamp: Date.now(), props }]);
+        }
     }
     /**
      * Returns the current timeline entries for the widget, including past and future entries.

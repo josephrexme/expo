@@ -26,6 +26,7 @@ export type WidgetConfig = {
         targetCellWidth?: number;
         targetCellHeight?: number;
         resizeMode?: 'none' | 'horizontal' | 'vertical' | 'both';
+        initialLayout?: string;
     } | null;
 };
 export type WidgetParameterString = {

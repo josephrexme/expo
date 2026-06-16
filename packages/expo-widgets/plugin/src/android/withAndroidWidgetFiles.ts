@@ -30,6 +30,10 @@ const withAndroidWidgetFiles: ConfigPlugin<WidgetConfig[]> = (config, widgets) =
         'app/src/main/java',
         ...androidPackage.split('.')
       );
+      const layoutRegistryConfigPath = path.join(
+        projectRoot,
+        'app/src/main/expo-widgets-layout-registry.config.json'
+      );
       const xmlDirectory = path.join(projectRoot, 'app/src/main/res/xml');
       const valuesDirectory = path.join(projectRoot, 'app/src/main/res/values');
       const widgetsXmlPath = path.join(valuesDirectory, 'expo_widgets.xml');
@@ -42,6 +46,7 @@ const withAndroidWidgetFiles: ConfigPlugin<WidgetConfig[]> = (config, widgets) =
         fs.rmSync(widgetsXmlPath);
       }
       fs.writeFileSync(widgetsXmlPath, createWidgetStringsXml(widgets));
+      fs.writeFileSync(layoutRegistryConfigPath, createLayoutRegistryConfig(widgets));
 
       for (const widget of widgets) {
         const providerPath = path.join(packageDirectory, `${getProviderClassName(widget)}.kt`);
@@ -66,6 +71,19 @@ const withAndroidWidgetFiles: ConfigPlugin<WidgetConfig[]> = (config, widgets) =
       return config;
     },
   ]);
+};
+
+const createLayoutRegistryConfig = (widgets: WidgetConfig[]): string => {
+  const config = {
+    widgets: widgets
+      .filter((widget) => widget.android?.initialLayout != null)
+      .map((widget) => ({
+        name: widget.name,
+        initialLayout: widget.android?.initialLayout,
+      })),
+  };
+
+  return `${JSON.stringify(config, null, 2)}\n`;
 };
 
 const createWidgetProviderKt = (androidPackage: string, widget: WidgetConfig): string => {

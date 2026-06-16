@@ -31,17 +31,20 @@ export type ActivityFamily = 'small' | 'medium';
  * - `accessoryCircular` - Circular accessory widget for the Lock Screen.
  * - `accessoryRectangular` - Rectangular accessory widget for the Lock Screen.
  * - `accessoryInline` - Inline accessory widget for the Lock Screen.
+ * @platform iOS
  */
 export type WidgetFamily = 'systemSmall' | 'systemMedium' | 'systemLarge' | 'systemExtraLarge' | 'accessoryCircular' | 'accessoryRectangular' | 'accessoryInline';
 export type WidgetEnvironment<T extends object | undefined = undefined> = {
     /**
      * The date of this timeline entry.
+     * @platform iOS
      */
-    date: Date;
+    date?: Date;
     /**
      * The widget family.
+     * @platform iOS
      */
-    widgetFamily: WidgetFamily;
+    widgetFamily?: WidgetFamily;
     /**
      * The color scheme of the widget's environment.
      */
@@ -247,6 +250,7 @@ export type LiveActivityEvents = {
 export declare class NativeWidgetObject extends SharedObject {
     constructor(name: string, layout: string, initialProps?: Record<string, any>);
     reload(): void;
+    updateSnapshot(props: Record<string, any>): void;
     updateTimeline(entries: ExpoTimelineEntry[]): void;
     getTimeline(): Promise<ExpoTimelineEntry[]>;
 }

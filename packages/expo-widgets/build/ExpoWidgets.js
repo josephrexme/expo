@@ -3,6 +3,7 @@ class WidgetStub {
     // eslint-disable-next-line @typescript-eslint/no-useless-constructor
     constructor(_name, _layout, _initialProps) { }
     reload() { }
+    updateSnapshot(_props) { }
     updateTimeline(_entries) { }
     async getTimeline() {
         return [];
